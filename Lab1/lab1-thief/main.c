@@ -1,4 +1,5 @@
 
+
 // UCLA CS 111 Lab 1 main program
 
 #include <errno.h>
@@ -64,7 +65,7 @@ main (int argc, char **argv)
     else
     {
       last_command = command;
-      execute_command (command, time_travel);
+      execute_simple_command (command);
     }
   }
 

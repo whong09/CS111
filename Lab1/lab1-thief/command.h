@@ -6,11 +6,6 @@
 typedef struct command *command_t;
 typedef struct command_stream *command_stream_t;
 
-void grow_memory(void *ptr, size_t *size);
-enum command_type scan(char *buffer);
-command_t make_simple_command(char *buffer);
-command_t make_compound_command(char *buffer, enum command_type type, command_t caller);
-
 /* Create a command stream from GETBYTE and ARG.  A reader of
    the command stream will invoke GETBYTE (ARG) to get the next byte.
    GETBYTE will return the next input byte, or a negative number

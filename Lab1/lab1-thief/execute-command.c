@@ -14,6 +14,12 @@ command_status (command_t c)
   return c->status;
 }
 
+void execute_simple_command(command_t *c)
+{
+	(*c)->status = 1;
+	return c;
+}
+
 void
 execute_command (command_t c, bool time_travel)
 {

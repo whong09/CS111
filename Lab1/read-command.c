@@ -220,7 +220,7 @@ make_compound_command(char *buffer, enum command_type type, command_t caller)
   else if(type == PIPE_COMMAND && caller->type != PIPE_COMMAND)
     compound_command->u.command[0] = caller->u.command[1];
   enum command_type adjacent_type = scan(buffer);
-  if(adjacent_type == SIMPLE_COMMAND)
+  if(adjacent_type == SIMPLE_COMMAND || adjacent_type == SEQUENCE_COMMAND)
   {
     compound_command->u.command[1] = make_simple_command(buffer);
     return compound_command;
@@ -347,11 +347,22 @@ make_command_stream (int (*get_next_byte) (void *),
   if(!feof(get_byte_argument))
   {
     eat_whitespace();
+    if((buffer[0] = get_byte(get_byte_argument)) == EOF)
+    {
+      free(stream);
+      free(node);
+      return NULL;
+    }
+    ungetc(buffer[0], get_byte_argument);
+    buffer[0] = '\0';
     enum command_type type = scan(buffer);  
 
-    while(type != SEQUENCE_COMMAND)  
+    while(1)  
     {
-      temp_node = make_node(buffer, type);	
+      if(type == SEQUENCE_COMMAND)
+        temp_node = make_node(buffer, SIMPLE_COMMAND);
+      else
+        temp_node = make_node(buffer, type);	
       if(!head)
       {
       	head = temp_node;
@@ -360,9 +371,18 @@ make_command_stream (int (*get_next_byte) (void *),
       {
 	      tail->next = temp_node;
         temp_node->prev = tail;
-      }	
+      }
       tail = temp_node;
+      if(type == SEQUENCE_COMMAND)
+        break;
       eat_whitespace();
+      if((buffer[0] = get_byte(get_byte_argument)) == EOF)
+      {
+        stream->commands = &head;
+        return stream;
+      }
+      ungetc(buffer[0], get_byte_argument);
+      buffer[0] = '\0';
       type = scan(buffer);
     }
   }
