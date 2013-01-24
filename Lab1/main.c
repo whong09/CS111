@@ -65,7 +65,7 @@ main (int argc, char **argv)
     else
     {
       last_command = command;
-      execute_simple_command (command);
+      execute_simple_command (&command);
     }
   }
 

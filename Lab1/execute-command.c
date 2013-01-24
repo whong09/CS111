@@ -4,9 +4,9 @@
 #include "command-internals.h"
 
 #include <error.h>
-
-/* FIXME: You may need to add #include directives, macro definitions,
-   static function definitions, etc.  */
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/wait.h>
 
 int
 command_status (command_t c)
@@ -16,9 +16,24 @@ command_status (command_t c)
 
 void execute_simple_command(command_t *c)
 {
-	(*c)->status = 1;
-	return c;
+	//add file I/O
+	command_t command = *c;
+	pid_t pid = fork();
+	if(pid > 0) {
+		int status;
+		while(waitpid(pid, &status, 0) < 0)
+			continue;
+		if(WIFEXITED(status))
+			command->status = WEXITSTATUS(status);
+	}
+	else if(pid == 0) {
+		execvp(command->u.word[0], command->u.word);
+	} else {
+		error (1, 0, "forking error");
+	}
 }
+
+//add execute_pipe_command
 
 void
 execute_command (command_t c, bool time_travel)

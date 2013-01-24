@@ -200,11 +200,17 @@ make_simple_command(char *buffer)
         in_output = false; 
     }
     else if(buffer[i] == EOF)
+    {
+      if(index >= word_size)
+        checked_grow_alloc(command->u.word, &word_size);
       return command;
+    }
     else
       syntax_error();
   }
   memset((void *) buffer, '\0', 1024);
+  if(index >= word_size)
+        checked_grow_alloc(command->u.word, &word_size);
   return command;
 }
 
@@ -393,6 +399,8 @@ make_command_stream (int (*get_next_byte) (void *),
 command_t
 read_command_stream (command_stream_t s)
 {
+  if(s == NULL)
+    return NULL;
   if(*(s->commands) != NULL)
   {
     command_node_t stream = *(s->commands);
