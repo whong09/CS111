@@ -6,4 +6,5 @@ Replace this README file with notes on your implementation.
 Mentions any special features or limitations.
 
 Limitations:
-	Simple command length limited to 4294967295 characters as implementation relies on checked_grow_alloc. Exceeding limit throws memory exhausted error.   
+	Simple command length limited to 1024 characters as implementation relies on a buffer of that size. Exceeding limit causes a segfault.   
+

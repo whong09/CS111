@@ -52,3 +52,4 @@ clean:
 	rm -fr *.o *~ *.bak *.tar.gz core *.core *.tmp timetrash $(DISTDIR)
 
 .PHONY: all dist check $(TEST_BASES) clean Skeleton
+	

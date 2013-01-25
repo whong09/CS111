@@ -127,6 +127,7 @@ make_simple_command(char *buffer)
     syntax_error();
   command_t command = checked_malloc(sizeof(struct command));
   command->type = SIMPLE_COMMAND; command->status = -1;
+  command->input = NULL; command->output = NULL;
   command->u.word = checked_malloc(8*sizeof(char*)); size_t word_size = 8;
   size_t input_size = 8;size_t output_size = 8;      
   size_t cur_word_size; size_t index = 0; bool in_word = false;

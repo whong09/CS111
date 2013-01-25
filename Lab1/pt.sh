@@ -1,1 +1,1 @@
-sleep 5
+ls | cat | cat
