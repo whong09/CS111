@@ -21,7 +21,7 @@ void print_command (command_t);
 
 /* Execute a command.  Use "time travel" if the flag is set.  */
 void execute_command (command_t, bool);
-void execute_simple_command(command_t *c);
+void execute_simple_command(command_t command);
 
 /* Return the exit status of a command, which must have previously
    been executed.  Wait for the command, if it is not already finished.  */

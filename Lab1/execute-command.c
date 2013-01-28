@@ -9,6 +9,10 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+void exec_command(command_t c);
 
 int
 command_status (command_t c)
@@ -17,88 +21,87 @@ command_status (command_t c)
 }
 
 void
-execute_simple_command(command_t *c)
+execute_simple_command(command_t command)
 {
-  command_t command = *c;
-  int save_stdin;  int save_stdout;
-  if(command->input != NULL)
-  {
-  save_stdin = dup(STDIN_FILENO);
-  int new_stdin = open(command->input, O_RDONLY);
-  if(new_stdin == -1)
-    error(1, errno, "Couldn't open file as input");
-  dup2(new_stdin, STDIN_FILENO);
-  }
-  if(command->output != NULL)
-  {
-  save_stdout = dup(STDOUT_FILENO);
-  int new_stdout = open(command->output, O_WRONLY | O_CREAT, 0664);
-  if(new_stdout == -1)
-    error(1, errno, "Couldn't open file as output");
-  dup2(new_stdout, STDOUT_FILENO);
-  }
   pid_t pid = fork();
   if(pid > 0) {
-  int status;
-  while(waitpid(pid, &status, 0) < 0)
-    continue;
-  if(!WIFEXITED(status))
-    error(1, errno, "Child process exit error");
-  if(command->input != NULL)
-  {
-    if(dup2(save_stdin, STDIN_FILENO) == -1)
-    {
-    print_command(command);
-    error(1, errno, "Couldn't reopen stdin");
-    }
-  }
-  if(command->output != NULL)
-  {
-    if(dup2(save_stdout, STDOUT_FILENO) == -1)
-    {
-    print_command(command);
-    error(1, errno, "Couldn't reopen stdout");
-    }
-  }
-  command->status = WEXITSTATUS(status);
+    int status;
+    if(waitpid(pid, &status, 0) == -1)
+      error(1, errno, "Child process exit error");
+    command->status = status;
   }
   else if(pid == 0) {
-  execvp(command->u.word[0], command->u.word);
-  } else {
-  error (1, 0, "forking error");
+    if(command->input != NULL)
+    {
+      int new_stdin = open(command->input, O_RDONLY);
+      if(new_stdin == -1)
+        error(1, errno, "Couldn't open file as input");
+      dup2(new_stdin, STDIN_FILENO);
+      close(new_stdin);
+     }
+    if(command->output != NULL)
+    {
+      int new_stdout = open(command->output, O_WRONLY | O_CREAT, 0664);
+      if(new_stdout == -1)
+        error(1, errno, "Couldn't open file as output");
+      dup2(new_stdout, STDOUT_FILENO);
+      close(new_stdout);
+    }
+    execvp(command->u.word[0], command->u.word);
+  } 
+  else {
+    error (1, 0, "forking error");
   }
 }
 
 void
-execute_pipe_command(command_t *c)
+execute_pipe_command(command_t command)
 {
-  command_t command = *c;
-  pid_t pid = fork();
-  if(pid > 0) {
-    int status;
-    while(waitpid(pid, &status, 0) < 0)
-      continue;
-    if(!WIFEXITED(status))
-      error(1, errno, "Child exit error");
-    command->status = WEXITSTATUS(status);
-    return;
-  } else if (pid == 0) {
-    int fd[2]; pipe(fd);
-    pid = fork();
-    if(pid > 0) {
-      close(fd[0]);
-      dup2(fd[1], STDOUT_FILENO);
-      char **args = command->u.command[0]->u.word;
-      execvp(args[0], args);
-    } else if (pid == 0) {
+   int fd[2];
+   pipe(fd);
+   pid_t pid;
+   if((pid=fork()) == 0)
+   {
+      dup2(fd[0],0);
       close(fd[1]);
-      dup2(fd[0], STDIN_FILENO);
-      char **args = command->u.command[1]->u.word;
-      execvp(args[0], args);
-    }
-  } else {
-    error(1, errno, "forking error");
-  }
+      exec_command(command->u.command[1]);
+      close(fd[0]);
+      exit(command->u.command[0]->status);
+   }
+   else if(pid > 0)
+   {
+      pid_t pid2;
+      if((pid2=fork()) == 0) {
+        dup2(fd[1],1);
+        close(fd[0]);
+        exec_command(command->u.command[0]);
+        close(fd[1]);
+        exit(command->u.command[0]->status);
+      }
+      else if (pid2 > 0)
+      {
+        close(fd[0]);
+        close(fd[1]);
+        int status;
+        pid_t wait_pid = waitpid(-1,&status,0);
+        if(wait_pid == pid)
+	{
+           command->status = status;
+           waitpid(pid2,&status,0);
+           return;
+        }
+        else if(wait_pid == pid2)
+	{
+           waitpid(pid,&status,0);
+           command->status = status;
+           return;
+        }
+      }
+      else 
+         error(1, errno, "forking error");
+   }
+   else 
+     error(1, errno, "forking error");
 }
 
 /*void
@@ -141,6 +144,70 @@ execute_pipe_command (command_t *c)
   error (1, errno, "forking error");
   }
 }*/
+ 
+void execute_and_command(command_t c)
+{
+	exec_command(c->u.command[0]);
+	
+	if (c->u.command[0]->status == 0) { 
+          exec_command(c->u.command[1]);
+          c->status = c->u.command[1]->status;
+	} else { 
+	  c->status = c->u.command[0]->status;// first one returns false, don't execute second one   	
+	}
+}
+
+void execute_or_command(command_t c)
+{
+	exec_command(c->u.command[0]);
+	if (c->u.command[0]->status == 0) { // first one returns true, don't execute the second command
+		c->status = c->u.command[0]->status;
+	} else {
+		exec_command(c->u.command[1]);
+		c->status = c->u.command[1]->status;
+	}
+}
+
+void execute_sequence_command(command_t c)
+{
+	exec_command(c->u.command[0]);
+	exec_command(c->u.command[1]);
+	c->status = c->u.command[1]->status;
+}
+
+void execute_subshell_command(command_t c)
+{
+	exec_command(c->u.subshell_command);
+	c->status = c->u.subshell_command->status;
+}
+
+void
+exec_command(command_t c)
+{
+	switch(c->type)
+	{
+		case AND_COMMAND:
+			execute_and_command(c);
+			break;
+		case OR_COMMAND:
+			execute_or_command(c);
+			break;
+		case PIPE_COMMAND:
+			execute_pipe_command(c);
+			break;
+		case SEQUENCE_COMMAND:
+			execute_sequence_command(c);
+			break;	
+		case SIMPLE_COMMAND:
+		execute_simple_command(c);
+			break;
+		case SUBSHELL_COMMAND:
+		execute_subshell_command(c);
+			break;
+		default:
+			error(1, 0, "Invalid command type");
+	}
+}
 
 void
 execute_command (command_t c, bool time_travel)
@@ -148,5 +215,9 @@ execute_command (command_t c, bool time_travel)
   /* FIXME: Replace this with your implementation.  You may need to
    add auxiliary functions and otherwise modify the source code.
    You can also use external functions defined in the GNU C Library.  */
-  error (1, 0, "command execution not yet implemented");
+	if(time_travel == 0)
+	{
+		exec_command(c);
+	}
+	//error (1, 0, "command execution not yet implemented");
 }
