@@ -14,6 +14,23 @@
 
 void exec_command(command_t c);
 
+struct file_node;
+typedef struct file_node *file_node_t;
+
+
+struct file_node
+{
+  char *file_name;
+  file_node_t next;
+  file_node_t prev;
+};
+
+struct file_list
+{
+  file_node_t root;
+};
+typedef struct file_list *file_list_t;
+
 int
 command_status (command_t c)
 {
@@ -210,6 +227,76 @@ exec_command(command_t c)
 }
 
 void
+add_to_list(char* name, file_list_t file_list)
+{
+  if(file_list->root == NULL)
+  {
+    file_list->root = (file_node_t) checked_malloc(sizeof(struct file_node));
+    file_list->root->file_name = name;
+    file_list->root->next = NULL;
+    file_list->root->prev = NULL;
+  } 
+  else
+  {
+    file_node_t curr = file_list->root;
+    file_node_t tmp = curr;
+    while(curr != NULL)
+    {
+      if(strcmp(curr->file_name,name)==0)
+         return;
+      else
+      {
+         tmp = curr;
+         curr = curr->next;
+      }
+    }
+    curr = checked_malloc(sizeof(struct file_node));
+    curr->file_name = name;
+    curr->next = NULL;
+    curr->prev = tmp;
+    tmp->next = curr;
+  }
+}
+
+void
+extract_dependencies(command_t c,file_list_t file_list)
+{
+  switch(c->type)
+  {
+    case AND_COMMAND:
+    case OR_COMMAND:
+    case PIPE_COMMAND:
+    case SEQUENCE_COMMAND:
+    extract_dependencies(c->u.command[0], file_list);
+    extract_dependencies(c->u.command[1], file_list);
+    break;
+    case SIMPLE_COMMAND:
+    if(c->input != NULL)
+    {
+      add_to_list(c->input,file_list); 
+    }
+    if(c->output != NULL)
+    {
+      add_to_list(c->output,file_list);
+    }
+    break;
+    case SUBSHELL_COMMAND:
+    if(c->input != NULL)
+    {
+      add_to_list(c->input,file_list);
+    }
+    if(c->output != NULL)
+    {
+      add_to_list(c->output,file_list);
+    }
+    extract_dependencies(c->u.subshell_command, file_list);
+    break;
+    default:
+      error(1, 0, "Invalid command type");
+  }
+}
+
+void
 execute_command (command_t c, bool time_travel)
 {
   /* FIXME: Replace this with your implementation.  You may need to
@@ -218,6 +305,21 @@ execute_command (command_t c, bool time_travel)
 	if(time_travel == 0)
 	{
 		exec_command(c);
+	}
+	else
+	{
+           file_list_t file_list = (file_list_t) checked_malloc(sizeof(struct file_list));
+           file_list->root = NULL;
+           extract_dependencies(c,file_list);   
+           file_node_t list = file_list->root;
+/*
+           while(list != NULL)
+		{
+printf("%s\n",list->file_name);
+list = list->next;
+                 }
+*/
+ 		//error (1, 0, "command execution not yet implemented");
 	}
 	//error (1, 0, "command execution not yet implemented");
 }
