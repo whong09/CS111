@@ -8,38 +8,3 @@ Mentions any special features or limitations.
 Limitations:
 	Simple command length limited to 1024 characters as implementation relies on a buffer of that size. Exceeding limit causes a segfault.   
 
-# redirection
-#echo this is the redirection > redir.txt
-#echo lala overwriting the redirection > redir.txt
-#sort -r < redir.txt > sorted.txt
-
-#pipe
-#echo first | echo second | echo third
-#ls | sort -r | cat
-#who | sort 
-#echo first > redir.txt | echo second
-
-#sub
-#(echo shelly works)
-#(echo first line in newshell; echo second line)
-#(echo 1 && (echo 2; echo 7) || echo 3 | cat)
-
-#and/or
-#echo or || echo and && echo what
-#echo a || echo b;
-
-#clean
-#rm redir.txt
-#rm sorted.txt
-#ls
-
-# bad exit status
-false && echo 1;
-true && false;
-true | false;
-(false)
-false;
-
-# fails
-(echo 1
-echo 2)
