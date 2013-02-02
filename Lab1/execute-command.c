@@ -361,6 +361,7 @@ execute_pipe_command(command_t command)
       {
         command->status = WEXITSTATUS(status);;
         waitpid(pid2,&status,0);
+        return;
       }
       else if(wait_pid == pid2)
       {
