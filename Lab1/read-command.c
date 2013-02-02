@@ -409,7 +409,7 @@ read_command_stream (command_stream_t s)
     if(stream->prev != NULL)
     {
       free(stream->prev->command);
-      free(stream->prev); 
+      free(stream->prev);
     }
     return stream->command;
   }

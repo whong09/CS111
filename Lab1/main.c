@@ -1,5 +1,3 @@
-
-
 // UCLA CS 111 Lab 1 main program
 
 #include <errno.h>
@@ -34,13 +32,13 @@ main (int argc, char **argv)
 
   for (;;)
     switch (getopt (argc, argv, "pt"))
-      {
+    {
       case 'p': print_tree = true; break;
       case 't': time_travel = true; break;
       default: usage (); break;
       case -1: goto options_exhausted;
-      }
- options_exhausted:;
+    }
+  options_exhausted:;
   // There must be exactly one file argument.
   if (optind != argc - 1)
     usage ();
@@ -65,10 +63,12 @@ main (int argc, char **argv)
     else
     {
       last_command = command;
-      execute_command (command,time_travel);
+      execute_command (command, time_travel);
     }
   }
-
-  return print_tree || !last_command ? 0 : command_status (last_command);
-  
+  while(waitpid(-1, NULL, 0)) {
+    if(errno == ECHILD)
+      break;
+  }
+  return print_tree || !last_command ? 0 : command_status (last_command);  
 }
