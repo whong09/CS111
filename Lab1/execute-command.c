@@ -121,30 +121,50 @@ file_node_t
 extract_simple_dependencies(command_t c)
 {
   file_node_t files = NULL;
+  file_node_t current = NULL;
   if(c->input != NULL)
   {
     files = checked_malloc(sizeof(struct file_node));
     files->prev = NULL; files->next = NULL;
     files->file_name = c->input;
     files->type = READ_FILE;
+    current = files;
   }
   if(c->output != NULL)
   {
-    file_node_t output = NULL;
     if(files == NULL)
     {
       files = checked_malloc(sizeof(struct file_node));
       files->prev = NULL; files->next = NULL;
-      output = files;
+      current = files;
     }
     else
     {
-      files->next = checked_malloc(sizeof(struct file_node));
-      output = files->next; 
-      output->prev = files; output->next = NULL;
+      current->next = checked_malloc(sizeof(struct file_node));
+      current = files->next; 
+      current->prev = files; current->next = NULL;
     }
-    output->type = WRITE_FILE;
-    output->file_name = c->output;
+    current->type = WRITE_FILE;
+    current->file_name = c->output;
+  }
+  int i = 1;
+  while(c->u.word[i] != NULL)
+  {
+    if(files == NULL)
+    {
+      files = checked_malloc(sizeof(struct file_node));
+      files->prev = NULL; files->next = NULL;
+      current = files;
+    }
+    else
+    {
+      current->next = checked_malloc(sizeof(struct file_node));
+      current = files->next; 
+      current->prev = files; current->next = NULL;
+    }
+    current->type = READ_FILE;
+    current->file_name = c->u.word[i];
+    i++;
   }
   int i = 1;
   if(files == NULL)
