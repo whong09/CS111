@@ -66,9 +66,6 @@ main (int argc, char **argv)
       execute_command (command, time_travel);
     }
   }
-  while(waitpid(-1, NULL, 0)) {
-    if(errno == ECHILD)
-      break;
-  }
+  join_all();
   return print_tree || !last_command ? 0 : command_status (last_command);  
 }

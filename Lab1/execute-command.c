@@ -13,13 +13,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 typedef struct dependency_node *dependency_node_t;
 typedef struct file_node *file_node_t;
-typedef struct pid_node *pid_node_t;
+typedef struct tid_node *tid_node_t;
 
 dependency_node_t dependency_root;
-int id = 1;
+int thread_count = 0;
+pthread_mutex_t d_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t tc_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct file_node {
   char *file_name;
@@ -27,14 +30,14 @@ struct file_node {
   file_node_t prev;
 };
 
-struct pid_node {
-  pid_t pid;
-  pid_node_t next;
+struct tid_node {
+  pthread_t tid;
+  tid_node_t next;
 };
 
 struct dependency_node {
   char *file_name;
-  pid_node_t waiting_list;
+  tid_node_t waiting_list;
   dependency_node_t next;
 };
 
@@ -48,40 +51,40 @@ command_status (command_t c)
 }
 
 void
-print_dependency ()
+join_all()
 {
-  dependency_node_t d_node = dependency_root;
-  while(d_node != NULL)
+  pthread_mutex_lock(&tc_mutex);
+  while(thread_count != 0)
   {
-    printf("%s:", d_node->file_name);
-    pid_node_t p_node = d_node->waiting_list;
-    while(p_node != NULL)
-    {
-      printf(" %d", p_node->pid);
-      p_node = p_node->next;
-    }
-    printf("\n");
-    d_node = d_node->next;
+    if(thread_count < 0)
+      error(1, 0, "Negative thread count");
+    pthread_mutex_unlock(&tc_mutex);
+    pthread_yield();
+    pthread_mutex_lock(&tc_mutex);
   }
 }
 
 bool
-is_runnable(pid_t pid)
+is_runnable(pthread_t tid)
 {
   dependency_node_t d_node = dependency_root;
   while(d_node != NULL)
   {
-    pid_node_t p_node = d_node->waiting_list;
-    if(p_node != NULL && p_node->pid == pid)
+    tid_node_t p_node = d_node->waiting_list;
+    if(p_node != NULL && p_node->tid == tid)
+    {
+      d_node = d_node->next;
       continue;
+    }
     while(p_node != NULL)
     {
-      if(p_node->pid == pid)
+      if(p_node->tid == tid)
         return false;
       p_node = p_node->next;
     }
     d_node = d_node->next;
   }
+  return true;
 }
 
 file_node_t
@@ -185,7 +188,7 @@ extract_dependencies(command_t c)
 }
 
 void
-add_dependencies(command_t c, pid_t pid)
+add_dependencies(command_t c, pthread_t tid)
 {
   file_node_t f_root = extract_dependencies(c);
   dependency_node_t d_node = dependency_root;
@@ -199,11 +202,11 @@ add_dependencies(command_t c, pid_t pid)
       {
         if(f_node == f_root)
           f_root = f_node->next;
-        pid_node_t p_node = d_node->waiting_list;
-        pid_node_t p_prev = p_node;
+        tid_node_t p_node = d_node->waiting_list;
+        tid_node_t p_prev = p_node;
         if(p_node == NULL)
         {
-          p_node = checked_malloc(sizeof(struct pid_node));
+          p_node = checked_malloc(sizeof(struct tid_node));
           goto make_node;
         }
         while(p_node != NULL)
@@ -211,9 +214,9 @@ add_dependencies(command_t c, pid_t pid)
           p_prev = p_node;
           p_node = p_node->next;
         }
-        p_node = checked_malloc(sizeof(struct pid_node));
+        p_node = checked_malloc(sizeof(struct tid_node));
         make_node:;
-        p_node->pid = pid;
+        p_node->tid = tid;
         p_node->next = NULL;
         if(d_node->waiting_list != NULL)
           p_prev->next = p_node;
@@ -244,8 +247,8 @@ add_dependencies(command_t c, pid_t pid)
     while(f_node != NULL)
     {
       tail_node->file_name = f_node->file_name;
-      tail_node->waiting_list = checked_malloc(sizeof(struct pid_node));
-      tail_node->waiting_list->pid = pid;
+      tail_node->waiting_list = checked_malloc(sizeof(struct tid_node));
+      tail_node->waiting_list->tid = tid;
       tail_node->waiting_list->next = NULL;
       tail_node->next = checked_malloc(sizeof(struct dependency_node));
       tail_prev = tail_node;
@@ -262,23 +265,23 @@ add_dependencies(command_t c, pid_t pid)
 }
 
 void
-remove_dependencies(pid_t pid)
+remove_dependencies(pthread_t tid)
 {
   dependency_node_t d_node = dependency_root;
   while(d_node != NULL)
   {
-    pid_node_t p_node = d_node->waiting_list;
-    pid_node_t p_prev = d_node->waiting_list;
+    tid_node_t p_node = d_node->waiting_list;
+    tid_node_t p_prev = d_node->waiting_list;
     while(p_node != NULL)
     {
-      if(p_node->pid != pid)
+      if(p_node->tid != tid)
       {
         p_prev = p_node;
         p_node = p_node->next;
       }
       else if(p_node == d_node->waiting_list)
       {
-        pid_node_t temp = p_node;
+        tid_node_t temp = p_node;
         p_node = p_node->next;
         d_node->waiting_list = p_node;
         p_prev = p_node;
@@ -286,7 +289,7 @@ remove_dependencies(pid_t pid)
       }
       else if(p_node != d_node->waiting_list)
       {
-        pid_node_t temp = p_node;
+        tid_node_t temp = p_node;
         p_node = p_node->next;
         p_prev->next = p_node;
         free(temp);
@@ -438,6 +441,29 @@ exec_command(command_t c)
 }
 
 void
+execute_thread(void *c)
+{
+  command_t command = (command_t) c;
+  pthread_mutex_lock(&d_mutex);
+  while(!is_runnable(pthread_self()))
+  {
+    pthread_mutex_unlock(&d_mutex);
+    pthread_yield();
+    pthread_mutex_lock(&d_mutex);
+  }
+  pthread_mutex_unlock(&d_mutex);
+  exec_command(c);
+  pthread_mutex_lock(&d_mutex);
+  pthread_mutex_lock(&tc_mutex);
+  thread_count--;
+  remove_dependencies(pthread_self());
+  pthread_mutex_unlock(&tc_mutex);
+  pthread_mutex_unlock(&d_mutex);
+  free(command);
+  pthread_exit(0);
+}
+
+void
 execute_command (command_t c, bool time_travel)
 {
   if(!time_travel)
@@ -446,24 +472,22 @@ execute_command (command_t c, bool time_travel)
   }
   else
   {
-    pid_t pid = fork();
-    if(pid > 0) {
-      return;
-    } else if(pid == 0) {
-      add_dependencies(c, getpid());
-      while(!is_runnable)
-        yield();
-      exec_command(c);
-      remove_dependencies(getpid());
-      exit(0);
-    } else { error(1, errno, "forking error"); }
+    command_t command = checked_malloc(sizeof(struct command));
+    memcpy(command, c, sizeof(struct command));
+    pthread_t tid;
+    pthread_mutex_lock(&d_mutex);
+    pthread_mutex_lock(&tc_mutex);
+    int status = pthread_create(&tid, NULL, (void *) &execute_thread, command);
+    if(status == 0)
+    {
+      thread_count++;
+      add_dependencies(c, tid);
+      pthread_mutex_unlock(&tc_mutex);
+      pthread_mutex_unlock(&d_mutex);
+    } 
+    else
+    {
+      error(1, status, "Error creating thread"); 
+    }
   }
-
-/*
-  add_dependencies(c, id++);
-  add_dependencies(c, id++);
-  add_dependencies(c, id++);
-  remove_dependencies(id-1);
-  print_dependency();
-*/
 }
