@@ -1,3 +1,3 @@
-echo 1 > file;
-cat < file > file1;
-echo 3 > file;
+a < b > c || a < d > e &&
+a < f || (a < g
+	a > h);

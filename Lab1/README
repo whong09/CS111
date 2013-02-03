@@ -8,3 +8,4 @@ Mentions any special features or limitations.
 Limitations:
 	Simple command length limited to 1024 characters as implementation relies on a buffer of that size. Exceeding limit causes a segfault.   
 
+	The time travel feature depends on multithreading in execute thread. The Makefile has been updated to compile with the -pthread flag. 

@@ -71,6 +71,25 @@ join_all()
   }
 }
 
+void
+print_dependency ()
+{
+  dependency_node_t d_node = dependency_root;
+  while(d_node != NULL)
+  {
+    printf("%s:", d_node->file_name);
+    tid_node_t t_node = d_node->waiting_list;
+    while(t_node != NULL)
+    {
+      printf(" %lu", t_node->tid);
+      printf("%c", (t_node->type == READ_FILE) ? 'R' : 'W');
+      t_node = t_node->next;
+    }
+    printf("\n");
+    d_node = d_node->next;
+  }
+}
+
 bool
 is_runnable(pthread_t tid)
 {
@@ -126,6 +145,29 @@ extract_simple_dependencies(command_t c)
     }
     output->type = WRITE_FILE;
     output->file_name = c->output;
+  }
+  int i = 1;
+  if(files == NULL)
+  {
+    if(!c->u.word[i])
+      return files;
+    files = checked_malloc(sizeof(struct file_node));
+    files->next = NULL; files->prev = NULL;
+    files->type = READ_FILE;
+    files->file_name = c->u.word[i];
+    i++;
+  }
+  file_node_t f_node = files;
+  while(f_node->next != NULL)
+    f_node = f_node->next;
+  while(c->u.word[i])
+  {
+    f_node->next = checked_malloc(sizeof(struct file_node));
+    f_node->next->prev = f_node;
+    f_node = f_node->next;
+    f_node->file_name = c->u.word[i];
+    f_node->type = READ_FILE;
+    f_node->next = NULL;
   }
   return files;
 }
