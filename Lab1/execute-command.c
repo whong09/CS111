@@ -24,14 +24,21 @@ int thread_count = 0;
 pthread_mutex_t d_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t tc_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+enum dependency_type {
+  READ_FILE,
+  WRITE_FILE,
+};
+
 struct file_node {
   char *file_name;
+  enum dependency_type type;
   file_node_t next;
   file_node_t prev;
 };
 
 struct tid_node {
   pthread_t tid;
+  enum dependency_type type;
   tid_node_t next;
 };
 
@@ -70,17 +77,21 @@ is_runnable(pthread_t tid)
   dependency_node_t d_node = dependency_root;
   while(d_node != NULL)
   {
-    tid_node_t p_node = d_node->waiting_list;
-    if(p_node != NULL && p_node->tid == tid)
+    tid_node_t t_node = d_node->waiting_list;
+    if(t_node != NULL && t_node->tid == tid)
     {
       d_node = d_node->next;
       continue;
     }
-    while(p_node != NULL)
+    while(t_node != NULL && t_node->type == READ_FILE)
     {
-      if(p_node->tid == tid)
+      t_node = t_node->next;
+    }
+    while(t_node != NULL)
+    {
+      if(t_node->tid == tid)
         return false;
-      p_node = p_node->next;
+      t_node = t_node->next;
     }
     d_node = d_node->next;
   }
@@ -96,6 +107,7 @@ extract_simple_dependencies(command_t c)
     files = checked_malloc(sizeof(struct file_node));
     files->prev = NULL; files->next = NULL;
     files->file_name = c->input;
+    files->type = READ_FILE;
   }
   if(c->output != NULL)
   {
@@ -112,6 +124,7 @@ extract_simple_dependencies(command_t c)
       output = files->next; 
       output->prev = files; output->next = NULL;
     }
+    output->type = WRITE_FILE;
     output->file_name = c->output;
   }
   return files;
@@ -200,28 +213,30 @@ add_dependencies(command_t c, pthread_t tid)
     {
       if(strcmp(d_node->file_name, f_node->file_name) == 0)
       {
+        enum dependency_type type = f_node->type;
         if(f_node == f_root)
           f_root = f_node->next;
-        tid_node_t p_node = d_node->waiting_list;
-        tid_node_t p_prev = p_node;
-        if(p_node == NULL)
+        tid_node_t t_node = d_node->waiting_list;
+        tid_node_t t_prev = t_node;
+        if(t_node == NULL)
         {
-          p_node = checked_malloc(sizeof(struct tid_node));
+          t_node = checked_malloc(sizeof(struct tid_node));
           goto make_node;
         }
-        while(p_node != NULL)
+        while(t_node != NULL)
         {
-          p_prev = p_node;
-          p_node = p_node->next;
+          t_prev = t_node;
+          t_node = t_node->next;
         }
-        p_node = checked_malloc(sizeof(struct tid_node));
+        t_node = checked_malloc(sizeof(struct tid_node));
         make_node:;
-        p_node->tid = tid;
-        p_node->next = NULL;
+        t_node->tid = tid;
+        t_node->type = type;
+        t_node->next = NULL;
         if(d_node->waiting_list != NULL)
-          p_prev->next = p_node;
+          t_prev->next = t_node;
         else
-          d_node->waiting_list = p_node;
+          d_node->waiting_list = t_node;
         if(f_node->prev != NULL)
           f_node->prev->next = f_node->next;
         if(f_node->next != NULL)
@@ -249,6 +264,7 @@ add_dependencies(command_t c, pthread_t tid)
       tail_node->file_name = f_node->file_name;
       tail_node->waiting_list = checked_malloc(sizeof(struct tid_node));
       tail_node->waiting_list->tid = tid;
+      tail_node->waiting_list->type = f_node->type;
       tail_node->waiting_list->next = NULL;
       tail_node->next = checked_malloc(sizeof(struct dependency_node));
       tail_prev = tail_node;
@@ -270,28 +286,28 @@ remove_dependencies(pthread_t tid)
   dependency_node_t d_node = dependency_root;
   while(d_node != NULL)
   {
-    tid_node_t p_node = d_node->waiting_list;
-    tid_node_t p_prev = d_node->waiting_list;
-    while(p_node != NULL)
+    tid_node_t t_node = d_node->waiting_list;
+    tid_node_t t_prev = d_node->waiting_list;
+    while(t_node != NULL)
     {
-      if(p_node->tid != tid)
+      if(t_node->tid != tid)
       {
-        p_prev = p_node;
-        p_node = p_node->next;
+        t_prev = t_node;
+        t_node = t_node->next;
       }
-      else if(p_node == d_node->waiting_list)
+      else if(t_node == d_node->waiting_list)
       {
-        tid_node_t temp = p_node;
-        p_node = p_node->next;
-        d_node->waiting_list = p_node;
-        p_prev = p_node;
+        tid_node_t temp = t_node;
+        t_node = t_node->next;
+        d_node->waiting_list = t_node;
+        t_prev = t_node;
         free(temp);
       }
-      else if(p_node != d_node->waiting_list)
+      else if(t_node != d_node->waiting_list)
       {
-        tid_node_t temp = p_node;
-        p_node = p_node->next;
-        p_prev->next = p_node;
+        tid_node_t temp = t_node;
+        t_node = t_node->next;
+        t_prev->next = t_node;
         free(temp);
       }
     }
