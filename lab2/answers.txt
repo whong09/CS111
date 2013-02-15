@@ -14,9 +14,9 @@ Student ID: 203795717
 Email: dpham1991@ucla.edu
 
 # Partner 2
-#Name: Partner's Name Here
-#Student ID: Partner's ID Here
-#Email: Partner's Email Here
+#Name: Wayne Hong
+#Student ID: 803821209
+#Email: whong09@gmail.com
 
 
 # Add any other information you'd like us to have below this line.

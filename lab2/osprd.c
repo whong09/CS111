@@ -34,7 +34,7 @@
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("CS 111 RAM Disk");
 // EXERCISE: Pass your names into the kernel as the module's authors.
-MODULE_AUTHOR("Skeletor");
+MODULE_AUTHOR("Diana Pham and Wayne Hong");
 
 #define OSPRD_MAJOR	222
 
@@ -73,6 +73,8 @@ typedef struct osprd_info {
 	int num_read_locks; // number of read locks
         int num_write_locks; //number of write locks
 
+	pid_t write_lock_pid; //pid of the write lock
+	pid_list_t read_lock_pids; //list of pids of the read locks
 	// The following elements are used internally; you don't need
 	// to understand them.
 	struct request_queue *queue;    // The device request queue.
@@ -176,26 +178,45 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		// as appropriate.
 
 		// Your code here.
-
-		osp_spin_lock(&d->mutex);
-		if((filp->f_flags & F_OSPRD_LOCKED) == 0)
+		if(filp->f_flags & F_OSPRD_LOCKED)
 		{
-                   osp_spin_unlock(&d->mutex);
-		   return 0;      
- 		}
-                else
-                {
+		  osp_spin_lock(&d->mutex);
                   if(filp_writable != 0)
                   { 
                     d->num_write_locks--;
+		    d->write_lock_pid = -1;
                   }
                   else
                   {
                     d->num_read_locks--;
+	            pid_list_t prev = d->read_lock_pids;
+		    pid_list_t curr = d->read_lock_pids;
+		    while(curr != NULL)
+		    {
+			if(curr->pid == current->pid)
+		        {
+			   if(prev == NULL)
+			   {
+			     d->read_lock_pids = curr->next;
+			   }
+			   else 
+			   {
+				prev->next = curr->next;
+				break;
+			   }
+			}
+			else
+			{
+			  prev = curr;
+			  curr = curr->next;
+			}
+		    }
                   } 
-                  wake_up_all(&d->blockq);
+                  wake_up_all(&d->blockq); 
+		  filp->f_flags &= ~F_OSPRD_LOCKED;
+		  osp_spin_unlock(&d->mutex);
                 }
-                osp_spin_unlock(&d->mutex);
+               
 
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
@@ -273,26 +294,49 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	    return -1;
 
 	  osp_spin_lock(&d->mutex);
+	  if(current->pid == d->write_lock_pid)
+	  {
+	    osp_spin_unlock(&d->mutex);
+	    return -EDEADLK;
+	  }
           unsigned my_ticket = d->ticket_head;
           d->ticket_head++;
-	  
+	  osp_spin_unlock(&d->mutex);
           //attempt to write-lock the ramdisk
           if(filp_writable)
 	  {
+	    osp_spin_lock(&d->mutex);
+	    pid_list_t prev = NULL;
+	    pid_list_t curr = d->read_lock_pids;
+            while(curr != NULL)
+	    {
+		if(curr->pid == current->pid)	
+	        {
+		   osp_spin_unlock(&d->mutex);
+    		   return -EDEADLK;
+		}
+		else
+		{
+		  prev = curr;
+		  curr = curr->next;
+		}
+	    }
+            osp_spin_unlock(&d->mutex);
             //block until conditions are met
             while(d->num_write_locks != 0 || d->num_read_locks != 0 || my_ticket != d->ticket_tail)
             {
               int res = wait_event_interruptible(d->blockq,1);
-              osp_spin_unlock(&d->mutex);
               if(res == -ERESTARTSYS)
                 return -ERESTARTSYS;
-              schedule();
-              osp_spin_lock(&d->mutex);
+	      schedule();
             }
+	    osp_spin_lock(&d->mutex);
             //process has acquired lock
             filp->f_flags |= F_OSPRD_LOCKED;
             d->num_write_locks++;
-          //  d->write_lock_pid = current->pid;
+            d->write_lock_pid = current->pid;
+            d->ticket_tail++;
+            osp_spin_unlock(&d->mutex);
           }
           //attempt to read-lock the ramdisk
           else 
@@ -301,18 +345,36 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
             while(d->num_write_locks != 0 || my_ticket != d->ticket_tail)
             {
               int res = wait_event_interruptible(d->blockq,1);
-              osp_spin_unlock(&d->mutex);
               if(res == -ERESTARTSYS)
                 return -ERESTARTSYS;
-              schedule();
-              osp_spin_lock(&d->mutex);
+              schedule(); 
             }
+	    osp_spin_lock(&d->mutex);
             //process has acquired lock
             filp->f_flags |= F_OSPRD_LOCKED;
             d->num_read_locks++;
+	    pid_list_t prev = NULL;
+	    pid_list_t curr = d->read_lock_pids;
+            while(curr != NULL)
+	    {
+		  prev = curr;
+		  curr = curr->next;
+	    }
+	    if(prev == NULL)
+	    {
+		d->read_lock_pids = kmalloc(sizeof(pid_list_t),GFP_ATOMIC);
+		d->read_lock_pids->pid = current->pid;
+		d->read_lock_pids->next = NULL;
+	    }
+            else
+	    {
+		prev->next = kmalloc(sizeof(pid_list_t),GFP_ATOMIC);
+		prev->next->pid = current->pid;
+		prev->next->next = NULL;
+	    }
+	    d->ticket_tail++;
+	    osp_spin_unlock(&d->mutex);
           }
-          d->ticket_tail++;
-          osp_spin_unlock(&d->mutex);
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -368,7 +430,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		//r = -ENOTTY;
           if(d == NULL)
             return -1;
-          if(filp->f_flags != F_OSPRD_LOCKED)
+          if((filp->f_flags & F_OSPRD_LOCKED) == 0)
           {
             return -EINVAL; 
           }
@@ -382,7 +444,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
             d->num_read_locks--;  
           }
           wake_up_all(&d->blockq);  
-          filp->f_flags &= !F_OSPRD_LOCKED;
+          filp->f_flags &= ~F_OSPRD_LOCKED;
           osp_spin_unlock(&d->mutex);
 	} else
 		r = -ENOTTY; /* unknown command */
