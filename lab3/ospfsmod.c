@@ -539,6 +539,7 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 
 	od->od_ino = 0;
 	oi->oi_nlink--;
+	return 0;
 }
 
 
@@ -577,7 +578,7 @@ allocate_block(void)
 		uint32_t offset = 0;
 		while(offset < OSPFS_BLKSIZE)
 		{
-			if(bitvector_test(vector, offset) == 1)
+			if(bitvector_test(vector, offset) != 0)
 			{
 				bitvector_clear(vector, offset);
 				return (free_block-OSPFS_FREEMAP_BLK)*OSPFS_BLKSIZE+offset;
@@ -607,8 +608,12 @@ static void
 free_block(uint32_t blockno)
 {
 	/* EXERCISE: Your code here */
-	bitvector_set(ospfs_block(OSPFS_FREEMAP_BLK+blockno/OSPFS_BLKSIZE), blockno%OSPFS_BLKSIZE);
-	//vector = freemap + blockno / blocksize & offset = blockno % blocksize
+	uint32_t last_inob = ospfs_super->os_firstinob + ospfs_super->os_ninodes/OSPFS_BLKINODES;
+	if(blockno > ospfs_super->os_nblocks || blockno < last_inob) //return on improper call
+		return;
+	else
+		bitvector_set(ospfs_block(OSPFS_FREEMAP_BLK+blockno/OSPFS_BLKSIZE), blockno%OSPFS_BLKSIZE);
+		//vector = freemap + blockno / blocksize & offset = blockno % blocksize
 }
 
 
@@ -758,7 +763,7 @@ add_block(ospfs_inode_t *oi)
 			memset(i2_vector, 0, OSPFS_BLKSIZE);
 		}
 		else
-			i2_vector = oi->oi_indirect2;
+			i2_vector = ospfs_block(oi->oi_indirect2);
 		uint32_t i2_off = indir_index(n)-1;
 		if(i2_vector[i2_off] == NULL)
 		{
@@ -773,7 +778,7 @@ add_block(ospfs_inode_t *oi)
 			}
 			i2_vector[i2_off] = allocated[1];
 		}
-		uint32_t * i_vector = ospfs_block(i2_vector[i2_off]);
+		uint32_t *i_vector = ospfs_block(i2_vector[i2_off]);
 		uint32_t i_off = direct_index(n);
 		if((i_vector[i_off] = allocate_block()) == 0)
 		{
@@ -794,7 +799,7 @@ add_block(ospfs_inode_t *oi)
 	}
 	else if(indir_index(n) == 0) //indirect block
 	{
-		uint32_t * i_vector;
+		uint32_t *i_vector;
 		if(oi->oi_indirect == NULL)
 		{
 			if((allocated[0] = allocate_block()) == 0)
@@ -804,7 +809,7 @@ add_block(ospfs_inode_t *oi)
 			memset(i_vector, 0, OSPFS_BLKSIZE);
 		}
 		else
-			i_vector = oi->oi_indirect;
+			i_vector = ospfs_block(oi->oi_indirect);
 		uint32_t i_off = direct_index(n);
 		if((i_vector[i_off] = allocate_block()) == 0 && allocated[0])
 		{
@@ -820,7 +825,10 @@ add_block(ospfs_inode_t *oi)
 		if((oi->oi_direct[n] = allocate_block()) == 0)
 			return -ENOSPC;
 		else
+		{
+			oi->oi_size = (n+1)*OSPFS_BLKSIZE;
 			return 0;
+		}
 	}
 	return -EIO;
 }
@@ -932,7 +940,6 @@ change_size(ospfs_inode_t *oi, uint32_t new_size)
 {
 	uint32_t old_size = oi->oi_size;
 	int r = 0;
-
 	while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {
 	        /* EXERCISE: Your code here */
 		//return -EIO; // Replace this line //replaced
@@ -954,7 +961,8 @@ change_size(ospfs_inode_t *oi, uint32_t new_size)
 	while (ospfs_size2nblocks(oi->oi_size) > ospfs_size2nblocks(new_size)) {
 	        /* EXERCISE: Your code here */
 		//return -EIO; // Replace this line //replaced
-		remove_block(oi);
+		if(remove_block(oi) != 0)
+			return -EIO;
 	}
 
 	/* EXERCISE: Make sure you update necessary file meta data
@@ -1021,12 +1029,14 @@ static ssize_t
 ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 {
 	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
+/**/
 	int retval = 0;
 	size_t amount = 0;
-
+/**/
 	// Make sure we don't read past the end of the file!
 	// Change 'count' so we never read past the end of the file.
 	/* EXERCISE: Your code here */
+/**/
 	if(count+*f_pos > oi->oi_size)
 		count = oi->oi_size - *f_pos;
 
@@ -1048,9 +1058,11 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 		// Copy data into user space. Return -EFAULT if unable to write
 		// into user space.
 		// Use variable 'n' to track number of bytes moved.
+/**/
 		/* EXERCISE: Your code here */
 		/*retval = -EIO; // Replace these lines
 		goto done;*/ //replaced
+/**/
 		n = OSPFS_BLKSIZE - (*f_pos % OSPFS_BLKSIZE);
 		if(count - amount < n)
 			n = count - amount;
@@ -1068,6 +1080,8 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 
     done:
 	return (retval >= 0 ? amount : retval);
+/**/
+	return 0;
 }
 
 
@@ -1106,9 +1120,9 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	/* EXERCISE: Your code here */
 	if(*f_pos+count > oi->oi_size)
 	{
-		int s = change_size(oi, *f_pos+count);
-		if(s != 0)
-			return s;
+		int change_return = change_size(oi, *f_pos+count);
+		if(change_return != 0)
+			return change_return;
 	}
 	// Copy data block by block
 	while (amount < count && retval >= 0) {
@@ -1217,13 +1231,15 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 	//    entries and return one of them.
 
 	/* EXERCISE: Your code here. */
+	//return ERR_PTR(-EINVAL); // Replace this line //replaced
 
 	// Check the existing directory data for an empty entry.  Return one
 	//    if you find it.
 
 	size_t offset;
 	struct ospfs_direntry* dentry;
-	for(offset = 0; offset < dir_oi->oi_size; offset += OSPFS_DIRENTRY_SIZE){
+	for(offset = 0; offset < dir_oi->oi_size; offset += OSPFS_DIRENTRY_SIZE) 
+	{
 		dentry = ospfs_inode_data(dir_oi,offset);
 		if(dentry->od_ino == 0)
 			return dentry;
@@ -1239,7 +1255,6 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 	od->od_ino = 0;
 	od->od_name[0] = 0;
 	return od;	
-	//return ERR_PTR(-EINVAL); // Replace this line
 }
 
 // ospfs_link(src_dentry, dir, dst_dentry

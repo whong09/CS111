@@ -24,3 +24,6 @@ Email: dpham1991@ucla.edu
 #Extra credit problem: none
 
 # Add any other information you'd like us to know below this line.
+
+Bug List:
+Making directory - operation not permitted
