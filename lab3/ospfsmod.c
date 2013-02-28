@@ -539,6 +539,10 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 
 	od->od_ino = 0;
 	oi->oi_nlink--;
+	if(oi->oi_nlink == 0)
+	{
+		change_size(oi, 0);
+	}
 	return 0;
 }
 
@@ -1029,14 +1033,23 @@ static ssize_t
 ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 {
 	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
-/**/
+	int i = 1;
+	while(i != 0)
+	{
+		i = allocate_block();
+		eprintk("%d\n", i);
+	}
+	free_block(100);
+	i = allocate_block();
+	eprintk("%d\n", i);
+/*
 	int retval = 0;
 	size_t amount = 0;
-/**/
+*/
 	// Make sure we don't read past the end of the file!
 	// Change 'count' so we never read past the end of the file.
 	/* EXERCISE: Your code here */
-/**/
+/*
 	if(count+*f_pos > oi->oi_size)
 		count = oi->oi_size - *f_pos;
 
@@ -1058,11 +1071,11 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 		// Copy data into user space. Return -EFAULT if unable to write
 		// into user space.
 		// Use variable 'n' to track number of bytes moved.
-/**/
+*/
 		/* EXERCISE: Your code here */
 		/*retval = -EIO; // Replace these lines
 		goto done;*/ //replaced
-/**/
+/*
 		n = OSPFS_BLKSIZE - (*f_pos % OSPFS_BLKSIZE);
 		if(count - amount < n)
 			n = count - amount;
@@ -1080,7 +1093,7 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 
     done:
 	return (retval >= 0 ? amount : retval);
-/**/
+*/
 	return 0;
 }
 
@@ -1237,7 +1250,7 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 	//    if you find it.
 
 	size_t offset;
-	struct ospfs_direntry* dentry;
+	struct ospfs_direntry *dentry;
 	for(offset = 0; offset < dir_oi->oi_size; offset += OSPFS_DIRENTRY_SIZE) 
 	{
 		dentry = ospfs_inode_data(dir_oi,offset);
@@ -1254,7 +1267,7 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 	//clear out 
 	od->od_ino = 0;
 	od->od_name[0] = 0;
-	return od;	
+	return od;
 }
 
 // ospfs_link(src_dentry, dir, dst_dentry
@@ -1370,17 +1383,13 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
 		new_ino = ospfs_inode(entry_ino);
 		//found empty inode
 		if(new_ino && new_ino->oi_nlink == 0)
-		{
 			break;
-		}
 		entry_ino++;
 	}
 	
 	// did not find a free inode
 	if(entry_ino == ospfs_super->os_ninodes)
-	{
 		return -ENOSPC;
-	}
 	
 	//initialize inode
 	new_ino->oi_size = 0;
