@@ -1113,7 +1113,19 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 static ssize_t
 ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *f_pos)
 {
-	eprintk("write\n");
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash == 0)
+			return 0;
+		else if(nswrites_to_crash < -1)
+		{
+			eprintk("nswrites_to_crash less than -1: %d!\n", nswrites_to_crash);
+			return -EIO;
+		}
+		else
+			nswrites_to_crash--;
+	}
+
 	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
 	int retval = 0;
 	size_t amount = 0;
@@ -1550,7 +1562,7 @@ int ospfs_ioctl(struct inode *inode, struct file *filp,
 {
 	if(cmd == OSPFSIOCRASH)
 	{
-		eprintk("crash: %ld\n", arg);
+		nswrites_to_crash = (int) arg;
 		return 0;
 	}
 	else
