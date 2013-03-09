@@ -40,6 +40,9 @@ extern uint32_t ospfs_length;
 static ospfs_super_t * const ospfs_super =
 	(ospfs_super_t *) &ospfs_data[OSPFS_BLKSIZE];
 
+//OSPFS Crash Testing: nswrites_to_crash modifies ospfs_write behavior
+int nswrites_to_crash = -1;
+
 static int change_size(ospfs_inode_t *oi, uint32_t want_size);
 static ospfs_direntry_t *find_direntry(ospfs_inode_t *dir_oi, const char *name, int namelen);
 
@@ -1032,24 +1035,16 @@ ospfs_notify_change(struct dentry *dentry, struct iattr *attr)
 static ssize_t
 ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 {
+	eprintk("Read\n");
 	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
-	int i = 1;
-	while(i != 0)
-	{
-		i = allocate_block();
-		eprintk("%d\n", i);
-	}
-	free_block(100);
-	i = allocate_block();
-	eprintk("%d\n", i);
-/*
+/**/
 	int retval = 0;
 	size_t amount = 0;
-*/
+/**/
 	// Make sure we don't read past the end of the file!
 	// Change 'count' so we never read past the end of the file.
 	/* EXERCISE: Your code here */
-/*
+/**/
 	if(count+*f_pos > oi->oi_size)
 		count = oi->oi_size - *f_pos;
 
@@ -1071,11 +1066,11 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 		// Copy data into user space. Return -EFAULT if unable to write
 		// into user space.
 		// Use variable 'n' to track number of bytes moved.
-*/
+/**/
 		/* EXERCISE: Your code here */
 		/*retval = -EIO; // Replace these lines
 		goto done;*/ //replaced
-/*
+/**/
 		n = OSPFS_BLKSIZE - (*f_pos % OSPFS_BLKSIZE);
 		if(count - amount < n)
 			n = count - amount;
@@ -1093,7 +1088,7 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 
     done:
 	return (retval >= 0 ? amount : retval);
-*/
+/**/
 	return 0;
 }
 
@@ -1118,6 +1113,7 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 static ssize_t
 ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *f_pos)
 {
+	eprintk("write\n");
 	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
 	int retval = 0;
 	size_t amount = 0;
@@ -1548,6 +1544,19 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	return (void *) 0;
 }
 
+//ioctl to simulate crashing
+int ospfs_ioctl(struct inode *inode, struct file *filp,
+  		unsigned int cmd, unsigned long arg)
+{
+	if(cmd == OSPFSIOCRASH)
+	{
+		eprintk("crash: %ld\n", arg);
+		return 0;
+	}
+	else
+		return -ENOTTY;
+}
+
 
 // Define the file system operations structures mentioned above.
 
@@ -1565,7 +1574,8 @@ static struct inode_operations ospfs_reg_inode_ops = {
 static struct file_operations ospfs_reg_file_ops = {
 	.llseek		= generic_file_llseek,
 	.read		= ospfs_read,
-	.write		= ospfs_write
+	.write		= ospfs_write,
+	.ioctl		= ospfs_ioctl
 };
 
 static struct inode_operations ospfs_dir_inode_ops = {
