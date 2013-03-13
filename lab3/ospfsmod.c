@@ -249,7 +249,6 @@ ospfs_mk_linux_inode(struct super_block *sb, ino_t ino)
 		return 0;
 	if (!(inode = new_inode(sb)))
 		return 0;
-
 	inode->i_ino = ino;
 	// Make it look like everything was created by root.
 	inode->i_uid = inode->i_gid = 0;
@@ -504,7 +503,6 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	return r;
 }
 
-^^^
 // ospfs_unlink(dirino, dentry)
 //   This function is called to remove a file.
 //
@@ -520,15 +518,6 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 static int
 ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 {
-	if(nswrites_to_crash != -1)
-	{
-		if(nswrites_to_crash < -1)
-			eprintk("nswrites_to_crash less than -1!\n");
-		else if(nswrites_to_crash == 0)
-			return 0;
-		else
-			nswrites_to_crash--;
-	}
 	ospfs_inode_t *oi = ospfs_inode(dentry->d_inode->i_ino);
 	ospfs_inode_t *dir_oi = ospfs_inode(dentry->d_parent->d_inode->i_ino);
 	int entry_off;
@@ -549,12 +538,31 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 		return -ENOENT;
 	}
 
-	od->od_ino = 0;
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}	
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}
 	oi->oi_nlink--;
 	if(oi->oi_nlink == 0)
 	{
 		change_size(oi, 0);
 	}
+	od->od_ino = 0;	
+
 	return 0;
 }
 
@@ -587,15 +595,6 @@ static uint32_t
 allocate_block(void)
 {
 	/* EXERCISE: Your code here */
-	if(nswrites_to_crash != -1)
-	{
-		if(nswrites_to_crash < -1)
-			eprintk("nswrites_to_crash less than -1!\n");
-		else if(nswrites_to_crash == 0)
-			return 42;
-		else
-			nswrites_to_crash--;
-	}
 	uint32_t free_block = OSPFS_FREEMAP_BLK;
 	while(free_block < ospfs_super->os_firstinob)
 	{
@@ -605,6 +604,15 @@ allocate_block(void)
 		{
 			if(bitvector_test(vector, offset) != 0)
 			{
+				if(nswrites_to_crash != -1)
+				{
+					if(nswrites_to_crash < -1)
+					eprintk("nswrites_to_crash less than -1!\n");
+					else if(nswrites_to_crash == 0)
+					return (free_block-OSPFS_FREEMAP_BLK)*OSPFS_BLKSIZE+offset;
+					else
+					nswrites_to_crash--;
+				}
 				bitvector_clear(vector, offset);
 				return (free_block-OSPFS_FREEMAP_BLK)*OSPFS_BLKSIZE+offset;
 				//the allocated block number = freeblock#*blocksize + bit#
@@ -635,7 +643,7 @@ free_block(uint32_t blockno)
 	/* EXERCISE: Your code here */
 	if(nswrites_to_crash != -1)
 	{
-		if(nswrites_to_crash < -1)
+		if(nswrites_to_crash < -1)			
 			eprintk("nswrites_to_crash less than -1!\n");
 		else if(nswrites_to_crash == 0)
 			return;
@@ -777,15 +785,6 @@ direct_index(uint32_t b)
 static int
 add_block(ospfs_inode_t *oi)
 {
-	if(nswrites_to_crash != -1)
-	{
-		if(nswrites_to_crash < -1)
-			eprintk("nswrites_to_crash less than -1!\n");
-		else if(nswrites_to_crash == 0)
-			return 0;
-		else
-			nswrites_to_crash--;
-	}
 	// current number of blocks in file
 	uint32_t n = ospfs_size2nblocks(oi->oi_size);
 
@@ -902,15 +901,6 @@ add_block(ospfs_inode_t *oi)
 static int
 remove_block(ospfs_inode_t *oi)
 {
-	if(nswrites_to_crash != -1)
-	{
-		if(nswrites_to_crash < -1)
-			eprintk("nswrites_to_crash less than -1!\n");
-		else if(nswrites_to_crash == 0)
-			return 0;
-		else
-			nswrites_to_crash--;
-	}
 	// current number of blocks in file
 	uint32_t n = ospfs_size2nblocks(oi->oi_size);
 
@@ -1089,7 +1079,6 @@ ospfs_notify_change(struct dentry *dentry, struct iattr *attr)
 static ssize_t
 ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 {
-	eprintk("Read\n");
 	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
 /**/
 	int retval = 0;
@@ -1167,19 +1156,6 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 static ssize_t
 ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *f_pos)
 {
-	if(nswrites_to_crash != -1)
-	{
-		if(nswrites_to_crash == 0)
-			return 0;
-		else if(nswrites_to_crash < -1)
-		{
-			eprintk("nswrites_to_crash less than -1: %d!\n", nswrites_to_crash);
-			return -EIO;
-		}
-		else
-			nswrites_to_crash--;
-	}
-
 	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
 	int retval = 0;
 	size_t amount = 0;
@@ -1222,6 +1198,19 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		n = OSPFS_BLKSIZE - (*f_pos % OSPFS_BLKSIZE);
 		if(count - amount < n)
 			n = count - amount;
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash == 0)
+			return 0;
+		else if(nswrites_to_crash < -1)
+		{
+			eprintk("nswrites_to_crash less than -1: %d!\n", nswrites_to_crash);
+			return -EIO;
+		}
+		else
+			nswrites_to_crash--;
+	}
+
 		retval = copy_from_user(&data[*f_pos%OSPFS_BLKSIZE], buffer, n);
 		if(retval < 0)
 		{
@@ -1310,6 +1299,28 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 
 	// Check the existing directory data for an empty entry.  Return one
 	//    if you find it.
+	size_t offset;
+	struct ospfs_direntry *dentry;
+	for(offset = 0; offset < dir_oi->oi_size; offset += OSPFS_DIRENTRY_SIZE) 
+	{
+		dentry = ospfs_inode_data(dir_oi,offset);
+		if(dentry->od_ino == 0)
+			return dentry;
+	}	
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}
+
+	//no empty entries, add a block to the directory
+	int add_return = add_block(dir_oi);
+	if(add_return < 0)
+		return ERR_PTR(add_return);
 
 	if(nswrites_to_crash != -1)
 	{
@@ -1320,19 +1331,7 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 		else
 			nswrites_to_crash--;
 	}
-	size_t offset;
-	struct ospfs_direntry *dentry;
-	for(offset = 0; offset < dir_oi->oi_size; offset += OSPFS_DIRENTRY_SIZE) 
-	{
-		dentry = ospfs_inode_data(dir_oi,offset);
-		if(dentry->od_ino == 0)
-			return dentry;
-	}	
-	
-	//no empty entries, add a block to the directory
-	int add_return = add_block(dir_oi);
-	if(add_return < 0)
-		return ERR_PTR(add_return);
+
 
 	ospfs_direntry_t *od = ospfs_inode_data(dir_oi,offset);
 	//clear out 
@@ -1373,16 +1372,6 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 static int
 ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dentry) {
 	/* EXERCISE: Your code here. */
-
-	if(nswrites_to_crash != -1)
-	{
-		if(nswrites_to_crash < -1)
-			eprintk("nswrites_to_crash less than -1!\n");
-		else if(nswrites_to_crash == 0)
-			return 0;
-		else
-			nswrites_to_crash--;
-	}
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
 	ospfs_inode_t *src_inode = src_dentry->d_inode->i_ino;	
 
@@ -1397,12 +1386,33 @@ ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dent
 	if(IS_ERR(direntry))
 		return PTR_ERR(direntry);
 
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}
+
 	//set the directory entry
 	direntry->od_ino = src_inode;
 	memcpy(direntry->od_name,dst_dentry->d_name.name, dst_dentry->d_name.len);
 
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}
+
 	//increase link count	
 	ospfs_inode(src_inode)->oi_nlink++;
+	
 	return 0;
 	//return -EINVAL;
 }
@@ -1439,15 +1449,6 @@ ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dent
 static int
 ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
-	if(nswrites_to_crash != -1)
-	{
-		if(nswrites_to_crash < -1)
-			eprintk("nswrites_to_crash less than -1!\n");
-		else if(nswrites_to_crash == 0)
-			return 0;
-		else
-			nswrites_to_crash--;
-	}
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
 	uint32_t entry_ino = 0;
 	ospfs_direntry_t *new_dir;
@@ -1479,7 +1480,17 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
 	// did not find a free inode
 	if(entry_ino == ospfs_super->os_ninodes)
 		return -ENOSPC;
-	
+
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}	
+
 	//initialize inode
 	new_ino->oi_size = 0;
 	new_ino->oi_ftype = OSPFS_FTYPE_REG;
@@ -1492,7 +1503,17 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
 	}	
 	new_ino->oi_indirect = 0;
 	new_ino->oi_indirect2 = 0;
-	
+
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}
+
 	//initialize directory entry
 	new_dir->od_ino = entry_ino;
 	memcpy(new_dir->od_name, dentry->d_name.name,dentry->d_name.len);
@@ -1536,15 +1557,6 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
 static int
 ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 {
-	if(nswrites_to_crash != -1)
-	{
-		if(nswrites_to_crash < -1)
-			eprintk("nswrites_to_crash less than -1!\n");
-		else if(nswrites_to_crash == 0)
-			return 0;
-		else
-			nswrites_to_crash--;
-	}
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
 	uint32_t entry_ino = 0;
 	ospfs_direntry_t *new_dir;
@@ -1575,6 +1587,16 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 		entry_ino++;
 	}
 	
+
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}
 	// did not find a free inode
 	if(entry_ino == ospfs_super->os_ninodes)
 	{
@@ -1588,6 +1610,16 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 	strncpy(new_ino->oi_symlink,symname,new_ino->oi_size);
 	new_ino->oi_symlink[new_ino->oi_size] = 0;
 	
+
+	if(nswrites_to_crash != -1)
+	{
+		if(nswrites_to_crash < -1)
+			eprintk("nswrites_to_crash less than -1!\n");
+		else if(nswrites_to_crash == 0)
+			return 0;
+		else
+			nswrites_to_crash--;
+	}
 	//fill in directory entry
 	new_dir->od_ino = entry_ino;
 	strncpy(new_dir->od_name,dentry->d_name.name, dentry->d_name.len);
@@ -1640,6 +1672,7 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 		else
 		{
 		nd_set_link(nd,oi->oi_symlink + i + 1);
+return (void *) 0;
 		}
 	}
 	nd_set_link(nd, oi->oi_symlink);
