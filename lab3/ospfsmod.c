@@ -518,6 +518,7 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 static int
 ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 {
+
 	ospfs_inode_t *oi = ospfs_inode(dentry->d_inode->i_ino);
 	ospfs_inode_t *dir_oi = ospfs_inode(dentry->d_parent->d_inode->i_ino);
 	int entry_off;
@@ -546,7 +547,13 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 			return 0;
 		else
 			nswrites_to_crash--;
-	}	
+	}
+
+	oi->oi_nlink--;
+	if(oi->oi_nlink == 0)
+	{
+		change_size(oi, 0);
+	}
 	if(nswrites_to_crash != -1)
 	{
 		if(nswrites_to_crash < -1)
@@ -555,13 +562,10 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 			return 0;
 		else
 			nswrites_to_crash--;
-	}
-	oi->oi_nlink--;
-	if(oi->oi_nlink == 0)
-	{
-		change_size(oi, 0);
-	}
+	}	
+
 	od->od_ino = 0;	
+
 
 	return 0;
 }
@@ -641,6 +645,7 @@ static void
 free_block(uint32_t blockno)
 {
 	/* EXERCISE: Your code here */
+
 	if(nswrites_to_crash != -1)
 	{
 		if(nswrites_to_crash < -1)			
