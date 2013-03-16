@@ -28,9 +28,33 @@ We used forking to implement the concurrency. We chose to process the downloads 
 
 # EXERCISE 2A: What conditions did you find and fix that would have
 #    triggered a buffer overrun bug?  (~1-3 sentences each)
+Filename Buffer
+Found a buffer overrun bug where if a filename longer than FILENAMESIZ- 1 would overflow the filename buffer. We fixed the bug by limiting the length to FILENAMESIZ. We also always add a null terminator at the end of the string for read or copy later.
 
 # EXERCISE 2B: What other robustness problems did you fix?  (~1-3 sentences
 #    each)
+
+1.  Prevent serving data from other directories
+When serving a peer, peers could try to access outside the directory and get other files. In order to prevent this we compare the current directory with the directory requested and ensure that they are the same.
+
+2. Check that files and path exists
+A peer could try to access files and directories that do not exist. We prevent this by running a check on the path.
+
+3.  Prevent sending infinite data
+A peer could be continuously sending data. To prevent this, we set a limit on the file size that we can download. If a peer attempts to send more than MAXIMUM_FILE_SIZE bytes, we stop downloading from that peer and try a different peer.
+
+4.  Stop extremely slow peers
+Some peers are extremely slow and waste our resources. To block peers who are serving us data at extremely low speeds, we set a minimum transfer speed and the number of samples to determine this transfer speed. Peers who are slower than this are rejected and we try a different peer.
+This means that we also may reject slow peers who upload below our minimum
+rate, but are not intentionally bad.
+The constants used are:
+ - MINIMUM_TRANSFER_RATE	minimum bytes/read required
+ - SPEED_SAMPLE_SIZE		# of samples to determine transfer rate
+
+5. Fix popular tracker bug
+The popular tracker had trouble communicating with the original osppeer
+because the RPC containing the peer list was much larger than TASKBUFSIZ,
+which meant that the RPC would not fit into one task buffer at once. It is difficult to dynamically allocate the task_buffer especially since downloads and uploads run in parallel. Instead we made the TASKBUFSIZ larger to accommodate more peers.
 
 # EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
 #    are they attacks?  (~3-10 sentences each)
