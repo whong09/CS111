@@ -44,10 +44,19 @@ A peer could try to access files and directories that do not exist. We prevent t
 A peer could be continuously sending data. To prevent this, we set a limit on the file size that we can download. If a peer attempts to send more than MAXIMUM_FILE_SIZE bytes, we stop downloading from that peer and try a different peer.
 
 4.  Stop extremely slow peers
+<<<<<<< HEAD
 Some peers are extremely slow and waste our resources. To block peers who are serving us data at extremely low speeds, we set a minimum transfer speed and the number of samples to determine this transfer speed. Peers who are slower than this are rejected and we try a different peer. We may also reject slow peers who upload below our minimum rate even when they are not actually bad.
 The constants used are:
  - MINIMUM_RATE			minimum bytes/read required
  - SAMPLE_SIZE			# of samples to determine rate
+=======
+Some peers are extremely slow and waste our resources. To block peers who are serving us data at extremely low speeds, we set a minimum transfer speed and the number of samples to determine this transfer speed. Peers who are slower than this are rejected and we try a different peer.
+This means that we also may reject slow peers who upload below our minimum
+rate, but are not intentionally bad.
+The constants used are:
+ - MINIMUM_TRANSFER_RATE	minimum bytes/read required
+ - SPEED_SAMPLE_SIZE		# of samples to determine transfer rate
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 
 5. Fix popular tracker bug
 The popular tracker had trouble communicating with the original osppeer

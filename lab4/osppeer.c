@@ -148,8 +148,13 @@ static void task_free(task_t *t)
 #define MAXIMUM_FILE_SIZE 65536					
 
 //prevent slow peers
+<<<<<<< HEAD
 #define MINIMUM_RATE 32
 #define SAMPLE_SIZE 10
+=======
+#define MINIMUM_TRANSFER_RATE 32
+#define SPEED_SAMPLE_SIZE 10
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 
 typedef enum taskbufresult {		// Status of a read or write attempt.
 	TBUF_ERROR = -1,		// => Error; close the connection.
@@ -575,6 +580,7 @@ static void task_download(task_t *t, task_t *tracker_task)
 		return;
 	}
 	
+<<<<<<< HEAD
 	// Calculate how rate peer sends data to us, based on the last n samples 
 	// the peer sent (n = SAMPLE_SIZE)	
 	int k = 0;
@@ -585,6 +591,18 @@ static void task_download(task_t *t, task_t *tracker_task)
 	for(k = 0; k < SAMPLE_SIZE; k++)
 	{
 		samples[k] = 10 * MINIMUM_RATE;
+=======
+	// Calculate how quickly a peer sends data to us, based on the last n samples 
+	// the peer sent	
+	int k = 0;
+	int last_read = 0;
+	int avg_rate = 0;
+	int speed_sample[SPEED_SAMPLE_SIZE];
+	int curr_sample;
+	for(k = 0; k < SPEED_SAMPLE_SIZE; k++)
+	{
+		speed_sample[k] = 10 * MINIMUM_TRANSFER_RATE;
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 	}
 	
 	// Read the file into the task buffer from the peer,
@@ -613,6 +631,7 @@ static void task_download(task_t *t, task_t *tracker_task)
 	}
 	
 	//check for very slow peers
+<<<<<<< HEAD
 	curr_sample = (curr_sample + 1) % SAMPLE_SIZE;
 	samples[curr_sample] = t->total_written - last_read;
 	last_read = t->total_written;
@@ -623,6 +642,18 @@ static void task_download(task_t *t, task_t *tracker_task)
 	}
 	avg_rate = avg_rate / SAMPLE_SIZE;
 	if(avg_rate < MINIMUM_RATE)
+=======
+	curr_sample = (curr_sample + 1) % SPEED_SAMPLE_SIZE;
+	speed_sample[curr_sample] = t->total_written - last_read;
+	last_read = t->total_written;
+	avg_rate = 0;
+	for(k = 0; k < SPEED_SAMPLE_SIZE; k++)
+	{
+		avg_rate += speed_sample[k];
+	}
+	avg_rate = avg_rate / SPEED_SAMPLE_SIZE;
+	if(avg_rate < MINIMUM_TRANSFER_RATE)
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 	{
 		error("Error: The peer is very slow");
 		goto try_again;
@@ -715,12 +746,21 @@ static void task_upload(task_t *t)
 	t->head = t->tail = 0;
 	
 	char file_path_buf[PATH_MAX+1];
+<<<<<<< HEAD
 	char curr_path_buf[PATH_MAX+1];
 	char* curr_path = getcwd(curr_path_buf, PATH_MAX + 1); // get current dir
 	char* file_path = realpath(t->filename, file_path_buf);
 	
 	// check if paths are correct and files exist
 	if (curr_path == NULL) {
+=======
+	char current_path_buf[PATH_MAX+1];
+	char* current_path = getcwd(current_path_buf, PATH_MAX + 1); // get current dir
+	char* file_path = realpath(t->filename, file_path_buf);
+	
+	// check if paths are correct and files exist
+	if (current_path == NULL) {
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 		errno = ENOENT;
 		error("Error: Invalid current folder\n");
 		goto exit;
@@ -739,8 +779,20 @@ static void task_upload(task_t *t)
 		goto exit;
 	}
 	
+<<<<<<< HEAD
 	// check if file is in current directory
 	if (strncmp(curr_path, file_path, strlen(curr_path))) {
+=======
+	// for overflow
+	if (strlen(file_path) >= FILENAMESIZ) {
+		errno = ENOENT;
+		error("Error: File name is too big\n");
+		goto exit;
+	}
+	
+	// check if file is in current directory
+	if (strncmp(current_path, file_path, strlen(current_path))) {
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 		errno = ENOENT;
 		error("Error: File not in current directory\n");
 		goto exit;
@@ -784,7 +836,11 @@ int main(int argc, char *argv[])
 	struct in_addr tracker_addr;
 	int tracker_port;
 	char *s;
+<<<<<<< HEAD
 	int num_fork = 0;
+=======
+	int numfork = 0;
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 	const char *myalias;
 	struct passwd *pwent;
 	
@@ -856,19 +912,31 @@ argprocess:
 	register_files(tracker_task, myalias);
 	
 	pid_t pid;
+<<<<<<< HEAD
 	for (; argc > 1; argc--, argv++){
 		if((t = start_download(tracker_task, argv[1]))){
 			if(num_fork<32){
+=======
+	
+	for (; argc > 1; argc--, argv++){
+		if((t = start_download(tracker_task, argv[1]))){
+			if(numfork<32){
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 				pid = fork();
 				if(pid == 0){
 					task_download(t, tracker_task);
 					exit(0);
 				}if (pid>0){
+<<<<<<< HEAD
 					num_fork++;
+=======
+					numfork++;
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 				}
 			}
 		}
 	}
+<<<<<<< HEAD
 
 	// Then accept connections from other peers and upload files to them!
 	while ((t = task_listen(listen_task))){
@@ -876,14 +944,31 @@ argprocess:
 			if(waitpid(-1, 0, WNOHANG)> 0)
 				num_fork--;
 		if(num_fork<32){
+=======
+	
+	// Then accept connections from other peers and upload files to them!
+	while ((1)){
+		if (numfork > 0)
+			if(waitpid(-1, 0, WNOHANG)> 0)
+				numfork--;
+		if(numfork<32){
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 			pid = fork();
 			if(pid < 0)
 				error("failed upload fork\n");
 			if(pid == 0){
+<<<<<<< HEAD
 				task_upload(t);
 				exit(0);
 			}else if(pid>0){
 				num_fork++;
+=======
+				t = task_listen(listen_task);
+				task_upload(t);
+				exit(0);
+			}else if(pid>0){
+				numfork++;
+>>>>>>> 6365412ddfb0be3ee755bd928dc8d467f23cb60c
 			}
 		}
 	}
