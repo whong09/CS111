@@ -14,13 +14,13 @@
 
 # Partner 1
 Name: Wayne Hong
-Student ID: 803821209
-Email: whong09@gmail.com
+Student ID: 
+Email: 
 
 # Partner 2 (if you're working in a team)
 Name: Diana Pham
-Student ID: 203795717
-Email: dpham1991@ucla.edu
+Student ID: 
+Email: 
 
 # EXERCISE 1: What method you used to make your peer download and upload
 #    files in parallel?  (~1-3 sentences)
